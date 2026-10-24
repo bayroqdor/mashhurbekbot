@@ -70,7 +70,8 @@ Ikkalasi bitta dasturda ishlaydi.
    botga yozsa, bot uning ID sini aytadi).
 6. Ixtiyoriy: `CHECK_SENDER_ID` ga to'lov botining ID sini yozsangiz, faqat undan kelgan cheklar
    hisoblanadi (birov qo'lda chek yozib qo'ysa hisobga kirmaydi).
-7. Ixtiyoriy, eski cheklarni ham yuklash uchun — **birinchi ishga tushirishdan oldin**:
+7. Ixtiyoriy, bot qo'shilishidan oldingi eski cheklarni ham yuklash (istalgan paytda,
+   bot to'xtatilgan holda; qayta ishga tushirish xavfsiz):
    ```
    python import_history.py 2026-10-01
    ```
@@ -82,6 +83,10 @@ Ikkalasi bitta dasturda ishlaydi.
    bilan ham yangilanib turadi.
 
 Bot o'chib qolsa, qayta yoqilganda o'chiq paytda kelgan xabarlarni o'zi o'qib chiqadi.
+Botni birinchi marta yoqishdan oldingi xabarlar esa faqat `import_history.py` orqali yuklanadi.
+
+Chek hisobga tushmasa: `python diagnose.py 30` — oxirgi 30 ta xabarni bot qanday tanigani va
+bazada bor-yo'qligini ko'rsatadi.
 
 ## Serverga o'rnatish
 

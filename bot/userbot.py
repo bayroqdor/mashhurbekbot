@@ -32,6 +32,7 @@ class Userbot:
 
         async with self.processor.lock:
             self.client.add_event_handler(self._on_message, events.NewMessage(chats=self.cfg.group_id))
+            self.client.add_event_handler(self._on_edit, events.MessageEdited(chats=self.cfg.group_id))
             await self._catch_up()
         me = await self.client.get_me()
         log.info("Userbot ishga tushdi: %s (%s)", me.first_name, me.id)
@@ -54,6 +55,10 @@ class Userbot:
     async def _on_message(self, event: events.NewMessage.Event) -> None:
         msg = event.message
         await self.processor.handle(msg.id, msg.date, msg.raw_text, msg.sender_id)
+
+    async def _on_edit(self, event: events.MessageEdited.Event) -> None:
+        msg = event.message
+        await self.processor.handle(msg.id, msg.date, msg.raw_text, msg.sender_id, edited=True)
 
     async def stop(self) -> None:
         await self.client.disconnect()

@@ -82,3 +82,52 @@ def test_reprocessing_is_idempotent(tmp_path):
     feed(proc, items)
     assert len(closed) == 1 and empty == []
     assert db.count_closings(GROUP) == 1
+
+
+def test_import_out_of_order_matches_live(tmp_path):
+    items = [
+        check_text("100", "A"), check_text("200", "B"), "Kun yopildi",
+        check_text("300", "C"), "Kun yopildi", "Kun yopildi",
+        check_text("400", "D"), "Kun yopildi", check_text("500", "E"),
+    ]
+    live_db, live_proc, _, _ = make(tmp_path / "live")
+    feed(live_proc, items)
+
+    # Bot oxirgi qismini jonli ko'rgan, boshi esa keyin tarixdan yuklangan
+    db, proc, _, _ = make(tmp_path / "imp")
+    split = 6
+    asyncio.run(_feed_from(proc, items, split))
+    for i, text in enumerate(items[:split], start=1):
+        proc.import_message(i, T0 + timedelta(minutes=i), text, 42)
+    db.rebuild(GROUP)
+
+    def state(d):
+        return [(c.msg_id, c.opened_at, c.opened_by_check, c.closed_at, c.check_count, c.total)
+                for c in d.list_closings(GROUP, 0, 100)], d.open_summary(GROUP)
+
+    assert state(db) == state(live_db)
+    assert len(state(db)[0]) == 3
+
+
+async def _feed_from(proc, items, start):
+    for i, text in enumerate(items[start:], start=start + 1):
+        await proc.handle(i, T0 + timedelta(minutes=i), text, 42)
+
+
+def test_edited_message_becomes_check(tmp_path):
+    db, proc, closed, _ = make(tmp_path)
+
+    async def run():
+        await proc.handle(1, T0, "⏳ To'lov kutilmoqda", 42)
+        await proc.handle(2, T0 + timedelta(minutes=1), "Kun yopildi", 42)  # chek yo'q — yopilmaydi
+        await proc.handle(3, T0 + timedelta(minutes=2), check_text("1 000", "Z"), 42)
+        await proc.handle(4, T0 + timedelta(minutes=3), "Kun yopildi", 42)
+        # 1-xabar keyin ✅ ga tahrirlandi — yopilgan kunga qo'shiladi
+        await proc.handle(1, T0, check_text("2 000", "Y"), 42, edited=True)
+        await proc.handle(4, T0 + timedelta(minutes=3), "Kun yopildi", 42, edited=True)
+    asyncio.run(run())
+
+    last = db.last_closing(GROUP)
+    assert (last.check_count, last.total) == (2, 3_000_00)
+    assert db.open_summary(GROUP).count == 0
+    assert db.count_closings(GROUP) == 1

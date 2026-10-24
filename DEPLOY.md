@@ -64,10 +64,8 @@ REPO_URL=https://TOKEN@github.com/bayroqdor/mashhurbekbot.git bash /tmp/mashhurb
    nano /opt/mashhurbekbot/.env
    ```
 
-4. *(Ixtiyoriy)* Eski cheklarni yuklash — faqat birinchi ishga tushirishdan **oldin**:
-   ```
-   runuser -u mashhurbekbot -- .venv/bin/python import_history.py 2026-10-01
-   ```
+4. *(Ixtiyoriy)* Bot qo'shilishidan oldingi eski cheklarni yuklash — 5-bo'limdagi
+   "Eski xabarlarni yuklash" ga qarang.
 
 ## 4. Ishga tushirish
 
@@ -92,6 +90,31 @@ systemctl status mashhurbekbot
 
 Bot qulasa, systemd uni 10 soniyadan keyin o'zi qayta yoqadi. To'xtab turgan paytda kelgan
 cheklar qayta yoqilganda o'qib olinadi.
+
+### Eski xabarlarni yuklash
+
+Bot birinchi marta yoqilganda guruh tarixini o'qimaydi, faqat undan keyin kelganlarni sanaydi.
+Eski cheklar va "Kun yopildi" lar kerak bo'lsa (sanani o'zingiz tanlang):
+
+```
+cd /opt/mashhurbekbot
+systemctl stop mashhurbekbot
+runuser -u mashhurbekbot -- .venv/bin/python import_history.py 2026-10-01
+systemctl start mashhurbekbot
+```
+
+Bazada bor xabarlar ikki marta hisoblanmaydi, barcha kunlar qaytadan hisoblanadi — skriptni
+xohlagancha qayta ishga tushirish mumkin. Guruhga hech narsa yozilmaydi.
+
+### Chek hisobga tushmasa
+
+```
+cd /opt/mashhurbekbot
+runuser -u mashhurbekbot -- .venv/bin/python diagnose.py 30
+```
+
+Oxirgi 30 ta xabarning har biri uchun bot uni nima deb tanigani (chek / kun yopildi / tanilmadi),
+kim yuborgani (`sender=`) va bazada bor-yo'qligi chiqadi. Bu ishlayotgan botga xalaqit bermaydi.
 
 ## 6. Bazani zaxiralash (tavsiya etiladi)
 
@@ -123,4 +146,4 @@ bilan boshqa joyga ham ko'chirib turing.
 | `TelegramConflictError` | Bot boshqa joyda ham ishlab turibdi. O'sha joyda o'chiring. |
 | `Could not find the input entity` | Userbot akkaunti guruhda yo'q yoki `GROUP_ID` noto'g'ri. |
 | Tugma bosilsa javob yo'q | Bot guruhda admin emas. Botni admin qiling. |
-| Chek kelsa ham hisoblanmayapti | `CHECK_SENDER_ID` noto'g'ri bo'lishi mumkin: logda `Chek boshqa joydan keldi (sender=...)` qatori chiqsa, o'sha raqamni yozing yoki qatorni bo'sh qoldiring. |
+| Chek kelsa ham hisoblanmayapti | `diagnose.py` ni ishga tushiring (5-bo'lim). `BAZADA YO'Q` — chek bot birinchi yoqilishidan oldin kelgan, `import_history.py` bilan yuklang. `HISOBLANMAYDI: sender` — `CHECK_SENDER_ID` ga o'sha `sender=` raqamini yozing yoki bo'sh qoldiring. `TANILMADI` — chek formati boshqacha, o'sha xabar matnini dasturchiga yuboring. |

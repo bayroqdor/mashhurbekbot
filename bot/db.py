@@ -77,17 +77,32 @@ class Database:
     # --- yozish ---------------------------------------------------------
 
     def add_check(self, chat_id: int, msg_id: int, msg_time: int, check: Check) -> bool:
-        """Chekni qo'shadi. Takroriy (shu xabar yoki shu Pay ID) bo'lsa False."""
-        cur = self.conn.execute(
-            "INSERT OR IGNORE INTO checks (chat_id, msg_id, msg_time, amount, paid_at, pay_id, qr_id, qr_name)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                chat_id, msg_id, msg_time, check.amount,
-                check.paid_at.isoformat(sep=" ") if check.paid_at else None,
-                check.pay_id, check.qr_id, check.qr_name,
-            ),
-        )
-        self.conn.commit()
+        """Chekni qo'shadi. Takroriy (shu xabar yoki shu Pay ID) bo'lsa False.
+
+        Chek allaqachon yopilgan kunga tegishli bo'lsa (tahrir yoki tarixni yuklash),
+        o'sha kunga qo'shiladi va kun summasi yangilanadi.
+        """
+        row = self.conn.execute(
+            "SELECT id FROM closings WHERE chat_id = ? AND msg_id > ? ORDER BY msg_id LIMIT 1",
+            (chat_id, msg_id),
+        ).fetchone()
+        closing_id = row[0] if row else None
+        with self.conn:
+            cur = self.conn.execute(
+                "INSERT OR IGNORE INTO checks"
+                " (chat_id, msg_id, msg_time, amount, paid_at, pay_id, qr_id, qr_name, closing_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    chat_id, msg_id, msg_time, check.amount,
+                    check.paid_at.isoformat(sep=" ") if check.paid_at else None,
+                    check.pay_id, check.qr_id, check.qr_name, closing_id,
+                ),
+            )
+            if cur.rowcount == 1 and closing_id is not None:
+                self.conn.execute(
+                    "UPDATE closings SET check_count = check_count + 1, total = total + ? WHERE id = ?",
+                    (check.amount, closing_id),
+                )
         return cur.rowcount == 1
 
     def close_day(self, chat_id: int, msg_id: int, closed_at: int) -> Closing | None:
@@ -117,6 +132,49 @@ class Database:
                 (cur.lastrowid, chat_id, msg_id),
             )
         return self.get_closing(cur.lastrowid)
+
+    def add_closing_raw(self, chat_id: int, msg_id: int, closed_at: int) -> None:
+        """Tarixni yuklashda: yopilishni yozib qo'yadi, hisob-kitob `rebuild` da."""
+        self.conn.execute(
+            "INSERT OR IGNORE INTO closings (chat_id, msg_id, opened_at, closed_at, check_count, total)"
+            " VALUES (?, ?, ?, ?, 0, 0)",
+            (chat_id, msg_id, closed_at, closed_at),
+        )
+        self.conn.commit()
+
+    def rebuild(self, chat_id: int) -> None:
+        """Barcha kunlarni xabarlar tartibi bo'yicha qaytadan hisoblaydi.
+
+        Har bir yopilish o'zidan oldingi yopilishdan keyingi cheklarni oladi.
+        Cheksiz yopilishlar o'chiriladi (jonli rejimdagi kabi, ular kunni yopmaydi).
+        """
+        with self.conn:
+            self.conn.execute("UPDATE checks SET closing_id = NULL WHERE chat_id = ?", (chat_id,))
+            prev_msg_id, prev_closed_at = 0, None
+            closings = self.conn.execute(
+                "SELECT id, msg_id, closed_at FROM closings WHERE chat_id = ? ORDER BY msg_id", (chat_id,)
+            ).fetchall()
+            for closing_id, msg_id, closed_at in closings:
+                bounds = (chat_id, prev_msg_id, msg_id)
+                count, total, first_at = self.conn.execute(
+                    "SELECT COUNT(*), COALESCE(SUM(amount), 0), MIN(msg_time) FROM checks"
+                    " WHERE chat_id = ? AND msg_id > ? AND msg_id < ?",
+                    bounds,
+                ).fetchone()
+                if count == 0:
+                    self.conn.execute("DELETE FROM closings WHERE id = ?", (closing_id,))
+                    continue
+                self.conn.execute(
+                    "UPDATE checks SET closing_id = ? WHERE chat_id = ? AND msg_id > ? AND msg_id < ?",
+                    (closing_id, *bounds),
+                )
+                self.conn.execute(
+                    "UPDATE closings SET opened_at = ?, opened_by_check = ?, check_count = ?, total = ?"
+                    " WHERE id = ?",
+                    (prev_closed_at if prev_closed_at is not None else first_at,
+                     prev_closed_at is None, count, total, closing_id),
+                )
+                prev_msg_id, prev_closed_at = msg_id, closed_at
 
     def get_setting(self, key: str) -> str | None:
         row = self.conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
