@@ -83,25 +83,9 @@ Ikkalasi bitta dasturda ishlaydi.
 
 Bot o'chib qolsa, qayta yoqilganda o'chiq paytda kelgan xabarlarni o'zi o'qib chiqadi.
 
-## Serverda doimiy ishlatish (Linux, systemd)
+## Serverga o'rnatish
 
-`/etc/systemd/system/mashhurbekbot.service`:
-```
-[Unit]
-Description=Mashhurbek hisobot boti
-After=network-online.target
-
-[Service]
-WorkingDirectory=/opt/mashhurbekbot
-ExecStart=/opt/mashhurbekbot/.venv/bin/python -m bot.main
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-```
-sudo systemctl enable --now mashhurbekbot
-```
+Debian serverga o'rnatish, systemd xizmati, yangilash va zaxiralash: [DEPLOY.md](DEPLOY.md).
 
 ## Testlar
 

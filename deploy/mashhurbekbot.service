@@ -1,0 +1,24 @@
+[Unit]
+Description=Mashhurbek hisobot boti
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=mashhurbekbot
+Group=mashhurbekbot
+WorkingDirectory=/opt/mashhurbekbot
+ExecStart=/opt/mashhurbekbot/.venv/bin/python -m bot.main
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=10
+
+# Xavfsizlik: kod faqat o'qish uchun, yozish faqat data/ papkaga
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mashhurbekbot/data
+
+[Install]
+WantedBy=multi-user.target
